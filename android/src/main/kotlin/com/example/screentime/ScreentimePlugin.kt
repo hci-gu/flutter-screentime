@@ -1,90 +1,90 @@
 package com.example.screentime
 
-import io.flutter.embedding.engine.plugins.FlutterPlugin
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.MethodChannel.Result
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Bundle
 import android.provider.Settings
 import androidx.annotation.NonNull
-import java.util.*
+import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
 import java.text.SimpleDateFormat
+import java.util.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 
-/** ScreentimePlugin */
-class ScreentimePlugin: FlutterPlugin, MethodCallHandler {
-  private val CHANNEL = "com.example.screen_time/usage"
+class ScreentimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+    private lateinit var channel: MethodChannel
+    private lateinit var context: Context
+    private var activity: android.app.Activity? = null
 
-  /// The MethodChannel that will the communication between Flutter and native Android
-  ///
-  /// This local reference serves to register the plugin with the Flutter Engine and unregister it
-  /// when the Flutter Engine is detached from the Activity
-  private lateinit var channel : MethodChannel
-
-  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL)
-    channel.setMethodCallHandler(this)
-  }
-
-  override fun onMethodCall(call: MethodCall, result: Result) {
-    when (call.method) {
-      "getHourlyUsage" -> {
-          val date = call.argument<String>("date") ?: ""
-          val usageData = getHourlyUsage(date)
-          result.success(usageData)
-      }
-      "hasUsageStatsPermission" -> {
-          result.success(hasUsageStatsPermission())
-      }
-      "requestUsageStatsPermission" -> {
-          requestUsageStatsPermission()
-          result.success(null)
-      }
-      "postScreenTime" -> {
-          val date = call.argument<String>("date") ?: ""
-          val usageData = getHourlyUsage(date)
-          val json = usageDataToJSON(date, usageData)
-          result.success(json.toString())
-      }
-      else -> result.notImplemented()
+    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        context = flutterPluginBinding.applicationContext
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.example.screen_time/usage")
+        channel.setMethodCallHandler(this)
     }
-  }
 
-  private fun hasUsageStatsPermission(): Boolean {
-        val appOpsManager = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "getHourlyUsage" -> {
+                val date = call.argument<String>("date") ?: ""
+                val usageData = getHourlyUsage(date)
+                result.success(usageData)
+            }
+
+            "hasUsageStatsPermission" -> {
+                result.success(hasUsageStatsPermission())
+            }
+
+            "requestUsageStatsPermission" -> {
+                requestUsageStatsPermission()
+                result.success(null)
+            }
+
+            "postScreenTime" -> {
+                val date = call.argument<String>("date") ?: ""
+                val usageData = getHourlyUsage(date)
+                val json = usageDataToJSON(date, usageData)
+                result.success(json.toString())
+            }
+
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun hasUsageStatsPermission(): Boolean {
+        val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             appOpsManager.unsafeCheckOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 android.os.Process.myUid(),
-                packageName
+                context.packageName
             )
         } else {
             appOpsManager.checkOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 android.os.Process.myUid(),
-                packageName
+                context.packageName
             )
         }
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
     private fun requestUsageStatsPermission() {
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
+        activity?.let {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            it.startActivity(intent)
+        }
     }
 
     private fun getHourlyUsage(date: String): Map<String, Long> {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val targetDate = dateFormat.parse(date) ?: return emptyMap()
@@ -139,7 +139,7 @@ class ScreentimePlugin: FlutterPlugin, MethodCallHandler {
     }
 
     private fun usageDataToJSON(date: String, usageData: Map<String, Long>): JSONObject {
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         return JSONObject().apply {
             put("deviceId", deviceId)
             put("screenTimeEntries", JSONArray().apply {
@@ -153,7 +153,24 @@ class ScreentimePlugin: FlutterPlugin, MethodCallHandler {
         }
     }
 
-  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-    channel.setMethodCallHandler(null)
-  }
+    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        channel.setMethodCallHandler(null)
+    }
+
+    // Handle activity context
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
+    }
 }
