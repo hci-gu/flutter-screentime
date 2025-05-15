@@ -18,11 +18,18 @@ class Screentime {
   }
 
   Future<Map<String, int>> getUsageStats(String date) async {
-    final Map<String, int> result = await _platform.invokeMethod(
+    final Map<Object?, Object?> result = await _platform.invokeMethod(
       "getHourlyUsage",
       {"date": date},
     );
 
-    return result;
+    // cast the result to Map<String, int>
+    final Map<String, int> resultMap = <String, int>{};
+    result.forEach((Object? key, Object? value) {
+      if (key is String && value is int) {
+        resultMap[key] = value;
+      }
+    });
+    return resultMap;
   }
 }
