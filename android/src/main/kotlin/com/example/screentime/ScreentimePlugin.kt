@@ -34,25 +34,16 @@ class ScreentimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
             "getHourlyUsage" -> {
                 val date = call.argument<String>("date") ?: ""
                 val usageData = getHourlyUsage(date)
-                result.success(usageData)
+                val json = usageDataToJSON(date, usageData)
+                result.success(json)
             }
-
             "hasUsageStatsPermission" -> {
                 result.success(hasUsageStatsPermission())
             }
-
             "requestUsageStatsPermission" -> {
                 requestUsageStatsPermission()
                 result.success(null)
             }
-
-            "postScreenTime" -> {
-                val date = call.argument<String>("date") ?: ""
-                val usageData = getHourlyUsage(date)
-                val json = usageDataToJSON(date, usageData)
-                result.success(json.toString())
-            }
-
             else -> result.notImplemented()
         }
     }
