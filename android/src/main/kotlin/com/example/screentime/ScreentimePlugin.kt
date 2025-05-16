@@ -34,8 +34,12 @@ class ScreentimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
             "getHourlyUsage" -> {
                 val date = call.argument<String>("date") ?: ""
                 val usageData = getHourlyUsage(date)
-                val json = usageDataToJSON(date, usageData)
-                var jsonString = json.toString()
+                // convert the usage data to JSON { "hour": seconds }
+                val json = JSONObject()
+                for ((hour, seconds) in usageData) {
+                    json.put(hour, seconds)
+                }
+                val jsonString = json.toString()
                 result.success(jsonString)
             }
             "hasUsageStatsPermission" -> {
@@ -128,21 +132,6 @@ class ScreentimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
         }
 
         return hourlyUsage.mapKeys { it.key.toString() }.mapValues { it.value / 1000 } // to seconds
-    }
-
-    private fun usageDataToJSON(date: String, usageData: Map<String, Long>): JSONObject {
-        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return JSONObject().apply {
-            put("deviceId", deviceId)
-            put("screenTimeEntries", JSONArray().apply {
-                usageData.forEach { (hour, seconds) ->
-                    put(JSONObject().apply {
-                        put("hour", "$date $hour")
-                        put("seconds", seconds)
-                    })
-                }
-            })
-        }
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
