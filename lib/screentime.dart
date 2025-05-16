@@ -19,10 +19,10 @@ class Screentime {
   }
 
   Future<Map<String, int>> getUsageStats(String date) async {
-    final Map<Object?, Object?> result = await _platform.invokeMethod(
-      "getHourlyUsage",
-      {"date": date},
-    );
+    final String jsonString = await _platform.invokeMethod("getHourlyUsage", {
+      "date": date,
+    });
+    final Map<Object?, Object?> result = json.decode(jsonString);
 
     final Map<String, int> resultMap = {};
     result.forEach((key, value) {
